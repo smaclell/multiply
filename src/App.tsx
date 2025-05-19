@@ -143,6 +143,7 @@ function PhaserGame() {
         this.rect.x = Phaser.Math.Clamp(this.rect.x + dx, 25, 375);
         this.rect.y = Phaser.Math.Clamp(this.rect.y + dy, 25, 375);
 
+        // Laser movement and bounds
         this.lasers = this.lasers.filter(laser => {
           if (laser.direction === 'left') laser.x -= this.laserSpeed;
           if (laser.direction === 'right') laser.x += this.laserSpeed;
@@ -150,6 +151,54 @@ function PhaserGame() {
           if (laser.direction === 'down') laser.y += this.laserSpeed;
           return laser.x >= -20 && laser.x <= 420 && laser.y >= -20 && laser.y <= 420;
         });
+
+        // --- Splitting and knockback logic ---
+        const newEnemies: Enemy[] = [];
+        const lasersToRemove: Set<Laser> = new Set();
+        for (let i = 0; i < this.lasers.length; i++) {
+          const laser = this.lasers[i];
+          let hit = false;
+          for (let j = 0; j < this.enemies.length; j++) {
+            const enemy = this.enemies[j];
+            const dist = Phaser.Math.Distance.Between(laser.x, laser.y, enemy.x, enemy.y);
+            if (dist < this.enemySize / 2 + 8) { // 8 is half laser thickness
+              // Remove the hit enemy
+              enemy.destroy();
+              this.enemies.splice(j, 1);
+              // Remove the laser
+              lasersToRemove.add(laser);
+              // Calculate knockback direction
+              let angle = 0;
+              if (laser.direction === 'left') angle = Math.PI;
+              if (laser.direction === 'right') angle = 0;
+              if (laser.direction === 'up') angle = -Math.PI / 2;
+              if (laser.direction === 'down') angle = Math.PI / 2;
+              // Spawn two new enemies with knockback
+              for (let k = 0; k < 2; k++) {
+                const offsetAngle = angle + (Math.random() - 0.5) * 0.5; // Slight random spread
+                const spawnDist = 18;
+                const ex = enemy.x + Math.cos(offsetAngle) * spawnDist;
+                const ey = enemy.y + Math.sin(offsetAngle) * spawnDist;
+                const newEnemy = new Enemy(this, ex, ey, this.enemySize, this.enemySize, 0xfacc15);
+                // Knockback velocity
+                const knockback = 6 + Math.random() * 2;
+                newEnemy.vx = Math.cos(offsetAngle) * knockback;
+                newEnemy.vy = Math.sin(offsetAngle) * knockback;
+                this.add.existing(newEnemy);
+                newEnemies.push(newEnemy);
+              }
+              hit = true;
+              break; // Only one enemy can be hit by a laser at a time
+            }
+          }
+          if (hit) continue; // Skip to next laser if this one hit
+        }
+        // Remove hit lasers
+        lasersToRemove.forEach(laser => laser.destroy());
+        this.lasers = this.lasers.filter(l => !lasersToRemove.has(l));
+        // Add new split enemies
+        this.enemies.push(...newEnemies);
+        // --- End splitting and knockback logic ---
 
         // Enemy update
         if (this.rect) {
