@@ -47,8 +47,11 @@ class Enemy extends Phaser.GameObjects.Rectangle {
     this.x += this.vx;
     this.y += this.vy;
     // Clamp to arena
-    this.x = Phaser.Math.Clamp(this.x, 18, 400 - 18);
-    this.y = Phaser.Math.Clamp(this.y, 18, 400 - 18);
+    const scene = this.scene as Phaser.Scene & { arenaWidth?: number; arenaHeight?: number };
+    const arenaWidth = scene.arenaWidth ?? 800;
+    const arenaHeight = scene.arenaHeight ?? 800;
+    this.x = Phaser.Math.Clamp(this.x, 18, arenaWidth - 18);
+    this.y = Phaser.Math.Clamp(this.y, 18, arenaHeight - 18);
   }
 }
 
@@ -69,13 +72,15 @@ function PhaserGame() {
       enemies: Enemy[] = [];
       enemySpeed = 1.5; // Start slow
       enemySize = 36;
+      arenaWidth = 800;
+      arenaHeight = 800;
 
       constructor() {
         super('MainScene');
       }
 
       create() {
-        this.rect = this.add.rectangle(200, 200, 50, 50, 0x38bdf8);
+        this.rect = this.add.rectangle(this.arenaWidth / 2, this.arenaHeight / 2, 50, 50, 0x38bdf8);
         this.cursors = this.input.keyboard!.createCursorKeys();
         this.wasd = this.input.keyboard!.addKeys({
           up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -94,10 +99,10 @@ function PhaserGame() {
         // Spawn one enemy at a random edge
         const edge = Phaser.Math.Between(0, 3);
         let x = 0, y = 0;
-        if (edge === 0) { x = 0; y = Phaser.Math.Between(0, 400); }
-        if (edge === 1) { x = 400; y = Phaser.Math.Between(0, 400); }
-        if (edge === 2) { x = Phaser.Math.Between(0, 400); y = 0; }
-        if (edge === 3) { x = Phaser.Math.Between(0, 400); y = 400; }
+        if (edge === 0) { x = 0; y = Phaser.Math.Between(0, this.arenaHeight); }
+        if (edge === 1) { x = this.arenaWidth; y = Phaser.Math.Between(0, this.arenaHeight); }
+        if (edge === 2) { x = Phaser.Math.Between(0, this.arenaWidth); y = 0; }
+        if (edge === 3) { x = Phaser.Math.Between(0, this.arenaWidth); y = this.arenaHeight; }
         const enemy = new Enemy(this, x, y, this.enemySize, this.enemySize, 0xfacc15);
         this.add.existing(enemy);
         this.enemies.push(enemy);
@@ -140,8 +145,8 @@ function PhaserGame() {
         if (this.wasd.right.isDown) dx = this.speed;
         if (this.wasd.up.isDown) dy = -this.speed;
         if (this.wasd.down.isDown) dy = this.speed;
-        this.rect.x = Phaser.Math.Clamp(this.rect.x + dx, 25, 375);
-        this.rect.y = Phaser.Math.Clamp(this.rect.y + dy, 25, 375);
+        this.rect.x = Phaser.Math.Clamp(this.rect.x + dx, 25, this.arenaWidth - 25);
+        this.rect.y = Phaser.Math.Clamp(this.rect.y + dy, 25, this.arenaHeight - 25);
 
         // Laser movement and bounds
         this.lasers = this.lasers.filter(laser => {
@@ -149,7 +154,7 @@ function PhaserGame() {
           if (laser.direction === 'right') laser.x += this.laserSpeed;
           if (laser.direction === 'up') laser.y -= this.laserSpeed;
           if (laser.direction === 'down') laser.y += this.laserSpeed;
-          return laser.x >= -20 && laser.x <= 420 && laser.y >= -20 && laser.y <= 420;
+          return laser.x >= -20 && laser.x <= this.arenaWidth + 20 && laser.y >= -20 && laser.y <= this.arenaHeight + 20;
         });
 
         // --- Splitting and knockback logic ---
@@ -219,8 +224,8 @@ function PhaserGame() {
     if (gameRef.current) {
       game = new Phaser.Game({
         type: Phaser.AUTO,
-        width: 400,
-        height: 400,
+        width: 800,
+        height: 800,
         parent: gameRef.current,
         backgroundColor: '#1e293b', // Tailwind slate-800
         scene: MainScene,
