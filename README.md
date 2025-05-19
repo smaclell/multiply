@@ -1,54 +1,54 @@
-# React + TypeScript + Vite
+# Multiply: A Phaser Arcade Game
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Multiply is a fast-paced arcade game built with Phaser, TypeScript, and React. Survive as long as possible by splitting multiplying enemies, collecting power-ups, and maximizing your score!
 
-Currently, two official plugins are available:
+## Gameplay
+- **Move** your player around the arena to avoid and split enemies.
+- **Shoot lasers** in four directions to split enemies. Each split creates two new enemies.
+- **Collect power-ups** for special effects and advantages.
+- **Survive** as long as possible and aim for a high score!
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Controls
+- **Move:** WASD keys
+- **Shoot:** Arrow keys (hold to fire repeatedly)
+- **Restart:** Spacebar (after game over)
 
-## Expanding the ESLint configuration
+### Power-Ups
+- **Shield:** Grants a shield that blocks one enemy hit (pressing into an enemy with a shield triggers a shield explosion, pushing enemies away).
+- **Explosion:** Your next laser triggers a large explosion, splitting all enemies in a radius for big points.
+- **Freeze:** Your next laser freezes the two split enemies, and frozen enemies can spread freeze to others on contact.
+- **Speed:** Increases your movement speed (up to a maximum).
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Scoring
+- +1 point for each enemy split
+- +2 points for shattering a frozen enemy
+- +3 points for each enemy destroyed by an explosion
+- Your high score is saved locally in your browser
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+## How to Run
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+2. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
+3. Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Tech Stack
+- [Phaser 3](https://phaser.io/) (game engine)
+- [React](https://react.dev/) + [Vite](https://vitejs.dev/) (UI and build tooling)
+- [TypeScript](https://www.typescriptlang.org/)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Project Structure
+- `src/phaser/` — Game logic (scenes, player, enemies, power-ups, effects)
+- `src/App.tsx` — Embeds the Phaser game in a React component
+- `src/main.tsx` — App entry point
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+## Customization
+Game parameters (arena size, speeds, colors, etc.) can be tweaked in `src/phaser/config.ts`.
+
+---
+
+Enjoy the challenge and see how high you can score!
