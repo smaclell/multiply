@@ -103,6 +103,9 @@ function PhaserGame() {
       hitsUntilPowerUp = Phaser.Math.Between(3, 7);
       playerShield = false;
       floatingTexts: { text: Phaser.GameObjects.Text, alphaSpeed: number }[] = [];
+      gameOver = false;
+      fadeOverlay: Phaser.GameObjects.Rectangle | null = null;
+      fadeTween: Phaser.Tweens.Tween | null = null;
 
       constructor() {
         super('MainScene');
@@ -125,6 +128,11 @@ function PhaserGame() {
         this.input.keyboard!.on('keyup-UP', () => this.stopShooting('up'), this);
         this.input.keyboard!.on('keydown-DOWN', () => this.startShooting('down'), this);
         this.input.keyboard!.on('keyup-DOWN', () => this.stopShooting('down'), this);
+        this.input.keyboard!.on('keydown-SPACE', () => {
+          if (this.gameOver) {
+            this.restartGame();
+          }
+        });
         // Spawn one enemy at a random edge
         const edge = Phaser.Math.Between(0, 3);
         let x = 0, y = 0;
@@ -168,6 +176,7 @@ function PhaserGame() {
       }
 
       update() {
+        if (this.gameOver) return;
         if (!this.rect || !this.cursors || !this.wasd) return;
         let dx = 0, dy = 0;
         if (this.wasd.left.isDown) dx = -this.speed;
@@ -260,6 +269,26 @@ function PhaserGame() {
           return true;
         });
 
+        // --- Game Over check ---
+        for (let i = 0; i < this.enemies.length; i++) {
+          const enemy = this.enemies[i];
+          const dist = Phaser.Math.Distance.Between(this.rect.x, this.rect.y, enemy.x, enemy.y);
+          if (dist < (this.enemySize + 50) / 2) { // 50 is player size
+            if (this.playerShield) {
+              this.playerShield = false;
+              this.showFloatingText('SHIELD BLOCKED!');
+              // Optionally, destroy the enemy that hit
+              enemy.destroy();
+              this.enemies.splice(i, 1);
+              break;
+            } else {
+              this.endGame();
+              break;
+            }
+          }
+        }
+        // --- End Game Over check ---
+
         // Enemy update
         if (this.rect) {
           for (let i = 0; i < this.enemies.length; i++) {
@@ -302,6 +331,55 @@ function PhaserGame() {
         }).setOrigin(0.5);
         t.alpha = 1;
         this.floatingTexts.push({ text: t, alphaSpeed: 0.025 });
+      }
+
+      endGame() {
+        this.gameOver = true;
+        // Fade overlay
+        if (!this.fadeOverlay) {
+          this.fadeOverlay = this.add.rectangle(this.arenaWidth / 2, this.arenaHeight / 2, this.arenaWidth, this.arenaHeight, 0x888888, 0.25).setDepth(5);
+        }
+        this.fadeTween = this.tweens.add({
+          targets: this.fadeOverlay,
+          alpha: { from: 0, to: 0.85 },
+          duration: 2400,
+          ease: 'Sine.easeInOut',
+        });
+      }
+
+      restartGame() {
+        // Remove all game objects except fade overlay
+        this.lasers.forEach(l => l.destroy());
+        this.lasers = [];
+        this.enemies.forEach(e => e.destroy());
+        this.enemies = [];
+        this.powerUps.forEach(p => p.destroy());
+        this.powerUps = [];
+        this.floatingTexts.forEach(obj => obj.text.destroy());
+        this.floatingTexts = [];
+        if (this.rect) {
+          this.rect.x = this.arenaWidth / 2;
+          this.rect.y = this.arenaHeight / 2;
+        }
+        // Reset state
+        this.playerShield = false;
+        this.hitsUntilPowerUp = Phaser.Math.Between(3, 7);
+        this.gameOver = false;
+        // Remove fade overlay
+        if (this.fadeOverlay) {
+          this.fadeOverlay.destroy();
+          this.fadeOverlay = null;
+        }
+        // Spawn one enemy at a random edge
+        const edge = Phaser.Math.Between(0, 3);
+        let x = 0, y = 0;
+        if (edge === 0) { x = 0; y = Phaser.Math.Between(0, this.arenaHeight); }
+        if (edge === 1) { x = this.arenaWidth; y = Phaser.Math.Between(0, this.arenaHeight); }
+        if (edge === 2) { x = Phaser.Math.Between(0, this.arenaWidth); y = 0; }
+        if (edge === 3) { x = Phaser.Math.Between(0, this.arenaWidth); y = this.arenaHeight; }
+        const enemy = new Enemy(this, x, y, this.enemySize, this.enemySize, 0xfacc15);
+        this.add.existing(enemy);
+        this.enemies.push(enemy);
       }
     }
 
