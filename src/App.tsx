@@ -237,30 +237,46 @@ function PhaserGame() {
             const enemy = this.enemies[j];
             const dist = Phaser.Math.Distance.Between(laser.x, laser.y, enemy.x, enemy.y);
             if (dist < this.enemySize / 2 + 8) { // 8 is half laser thickness
-              // Remove the hit enemy
-              enemy.destroy();
-              this.enemies.splice(j, 1);
-              // Remove the laser
-              lasersToRemove.add(laser);
-              // Calculate knockback direction
-              let angle = 0;
-              if (laser.direction === 'left') angle = Math.PI;
-              if (laser.direction === 'right') angle = 0;
-              if (laser.direction === 'up') angle = -Math.PI / 2;
-              if (laser.direction === 'down') angle = Math.PI / 2;
-              // Spawn two new enemies with knockback
-              for (let k = 0; k < 2; k++) {
-                const offsetAngle = angle + (Math.random() - 0.5) * 0.5; // Slight random spread
-                const spawnDist = 18;
-                const ex = enemy.x + Math.cos(offsetAngle) * spawnDist;
-                const ey = enemy.y + Math.sin(offsetAngle) * spawnDist;
-                const newEnemy = new Enemy(this, ex, ey, this.enemySize, this.enemySize, 0xfacc15);
-                // Knockback velocity
-                const knockback = 6 + Math.random() * 2;
-                newEnemy.vx = Math.cos(offsetAngle) * knockback;
-                newEnemy.vy = Math.sin(offsetAngle) * knockback;
-                this.add.existing(newEnemy);
-                newEnemies.push(newEnemy);
+              if (enemy.freezeTimer > 0) {
+                // Shatter effect: destroy, show text, blue burst
+                this.showFloatingText('SHATTER!');
+                const shatter = this.add.circle(enemy.x, enemy.y, 24, 0x38bdf8, 0.5).setDepth(10);
+                this.tweens.add({
+                  targets: shatter,
+                  radius: { from: 24, to: 60 },
+                  alpha: { from: 0.5, to: 0 },
+                  duration: 300,
+                  onComplete: () => shatter.destroy(),
+                });
+                enemy.destroy();
+                this.enemies.splice(j, 1);
+                lasersToRemove.add(laser);
+              } else {
+                // Remove the hit enemy
+                enemy.destroy();
+                this.enemies.splice(j, 1);
+                // Remove the laser
+                lasersToRemove.add(laser);
+                // Calculate knockback direction
+                let angle = 0;
+                if (laser.direction === 'left') angle = Math.PI;
+                if (laser.direction === 'right') angle = 0;
+                if (laser.direction === 'up') angle = -Math.PI / 2;
+                if (laser.direction === 'down') angle = Math.PI / 2;
+                // Spawn two new enemies with knockback
+                for (let k = 0; k < 2; k++) {
+                  const offsetAngle = angle + (Math.random() - 0.5) * 0.5; // Slight random spread
+                  const spawnDist = 18;
+                  const ex = enemy.x + Math.cos(offsetAngle) * spawnDist;
+                  const ey = enemy.y + Math.sin(offsetAngle) * spawnDist;
+                  const newEnemy = new Enemy(this, ex, ey, this.enemySize, this.enemySize, 0xfacc15);
+                  // Knockback velocity
+                  const knockback = 6 + Math.random() * 2;
+                  newEnemy.vx = Math.cos(offsetAngle) * knockback;
+                  newEnemy.vy = Math.sin(offsetAngle) * knockback;
+                  this.add.existing(newEnemy);
+                  newEnemies.push(newEnemy);
+                }
               }
               // Power-up spawn logic
               this.hitsUntilPowerUp--;
