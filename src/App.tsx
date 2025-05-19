@@ -12,6 +12,7 @@ class Enemy extends Phaser.GameObjects.Rectangle {
   lag = 0.12; // Homing lag factor
   repulsionStrength = 0.8;
   repulsionRadius = 40;
+  freezeTimer = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, color: number) {
     super(scene, x, y, w, h, color);
@@ -21,6 +22,16 @@ class Enemy extends Phaser.GameObjects.Rectangle {
   }
 
   update(target: Phaser.GameObjects.Rectangle, allEnemies: Enemy[]) {
+    if (this.freezeTimer > 0) {
+      this.freezeTimer -= (this.scene.game.loop.delta || 16) / 1000;
+      if (this.freezeTimer > 0) {
+        this.setFillStyle(0x38bdf8); // blue tint
+        return;
+      } else {
+        this.setFillStyle(0xfacc15); // reset color
+        this.freezeTimer = 0;
+      }
+    }
     // Homing with lag
     const dx = target.x - this.x;
     const dy = target.y - this.y;
@@ -38,7 +49,11 @@ class Enemy extends Phaser.GameObjects.Rectangle {
       const oy = this.y - other.y;
       const odist = Math.hypot(ox, oy);
       if (odist > 0 && odist < this.repulsionRadius) {
-        const force = (this.repulsionRadius - odist) / this.repulsionRadius * this.repulsionStrength;
+        let force = (this.repulsionRadius - odist) / this.repulsionRadius * this.repulsionStrength;
+        // Stronger repulsion from frozen enemies
+        if (other.freezeTimer > 0) {
+          force *= 2.5; // Increase this value for even stronger avoidance
+        }
         this.vx += (ox / odist) * force;
         this.vy += (oy / odist) * force;
       }
@@ -111,6 +126,8 @@ function PhaserGame() {
       fadeTween: Phaser.Tweens.Tween | null = null;
       _shieldText: Phaser.GameObjects.Text | null = null;
       explosionReady = false;
+      freezeReady = false;
+      freezeLaserIndex: number | null = null;
 
       constructor() {
         super('MainScene');
@@ -175,9 +192,17 @@ function PhaserGame() {
         if (!this.rect) return;
         const laserWidth = direction === 'left' || direction === 'right' ? 30 : 8;
         const laserHeight = direction === 'up' || direction === 'down' ? 30 : 8;
-        const laser = this.add.rectangle(this.rect.x, this.rect.y, laserWidth, laserHeight, 0xef4444) as Laser;
+        let color = 0xef4444;
+        if (this.freezeReady && this.freezeLaserIndex == null) {
+          color = 0x38bdf8; // blue for freeze
+        }
+        const laser = this.add.rectangle(this.rect.x, this.rect.y, laserWidth, laserHeight, color) as Laser;
         laser.direction = direction;
         this.lasers.push(laser);
+        // Mark this laser as the freeze laser if needed
+        if (this.freezeReady && this.freezeLaserIndex == null) {
+          this.freezeLaserIndex = this.lasers.length - 1;
+        }
       }
 
       update() {
@@ -245,6 +270,16 @@ function PhaserGame() {
               if (this.explosionReady) {
                 this.explosionReady = false;
                 this.explosionEffect(laser.x, laser.y);
+              }
+              // Freeze power-up logic
+              if (this.freezeReady && this.freezeLaserIndex === i) {
+                this.freezeReady = false;
+                this.freezeLaserIndex = null;
+                // Freeze only the two split enemies
+                const freezeDuration = 2;
+                for (const e of newEnemies.slice(-2)) {
+                  e.freezeTimer = freezeDuration;
+                }
               }
               hit = true;
               break; // Only one enemy can be hit by a laser at a time
@@ -338,6 +373,24 @@ function PhaserGame() {
             this.enemies[i].update(this.rect, this.enemies);
           }
         }
+
+        // Freeze spread: if any enemy touches a frozen enemy, they also freeze
+        const freezeDuration = 2;
+        for (let i = 0; i < this.enemies.length; i++) {
+          const e1 = this.enemies[i];
+          if (e1.freezeTimer > 0) {
+            for (let j = 0; j < this.enemies.length; j++) {
+              if (i === j) continue;
+              const e2 = this.enemies[j];
+              if (e2.freezeTimer <= 0) {
+                const d = Phaser.Math.Distance.Between(e1.x, e1.y, e2.x, e2.y);
+                if (d < this.enemySize) {
+                  e2.freezeTimer = freezeDuration;
+                }
+              }
+            }
+          }
+        }
       }
 
       shutdown() {
@@ -347,8 +400,7 @@ function PhaserGame() {
       }
 
       spawnPowerUp() {
-        // Randomly choose shield or explosion for now
-        const types: PowerUpType[] = ['shield', 'explosion'];
+        const types: PowerUpType[] = ['shield', 'explosion', 'freeze'];
         const type: PowerUpType = types[Phaser.Math.Between(0, types.length - 1)];
         const margin = 60;
         const x = Phaser.Math.Between(margin, this.arenaWidth - margin);
@@ -365,6 +417,10 @@ function PhaserGame() {
         if (powerUp.type === 'explosion') {
           this.explosionReady = true;
           this.showFloatingText('EXPLOSION!');
+        }
+        if (powerUp.type === 'freeze') {
+          this.freezeReady = true;
+          this.showFloatingText('FREEZE!');
         }
         // Add more power-up types here
       }
@@ -493,6 +549,27 @@ function PhaserGame() {
             enemy.vy += Math.sin(pushAngle) * 12;
             enemy.destroy();
             this.enemies.splice(i, 1);
+          }
+        }
+      }
+
+      freezeEffect(x: number, y: number) {
+        // Visual effect: blue circle that quickly expands and fades
+        const freezeRadius = 120;
+        const freezeDuration = 2; // seconds
+        const freeze = this.add.circle(x, y, 30, 0x38bdf8, 0.4).setDepth(10);
+        this.tweens.add({
+          targets: freeze,
+          radius: { from: 30, to: freezeRadius },
+          alpha: { from: 0.4, to: 0 },
+          duration: 350,
+          onComplete: () => freeze.destroy(),
+        });
+        // Freeze all enemies in radius
+        for (const enemy of this.enemies) {
+          const dist = Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y);
+          if (dist < freezeRadius) {
+            enemy.freezeTimer = freezeDuration;
           }
         }
       }
