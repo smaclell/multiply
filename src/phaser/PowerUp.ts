@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import * as config from './config';
+import type { MainScene } from './MainScene';
 
 export type PowerUpType = 'shield' | 'explosion' | 'freeze' | 'piercing' | 'speed';
 
@@ -25,5 +26,25 @@ export class PowerUp extends Phaser.GameObjects.Ellipse {
   destroy(fromScene?: boolean) {
     this.pulseTween?.stop();
     super.destroy(fromScene);
+  }
+
+  applyEffect(scene: MainScene) {
+    if (this.type === 'shield') {
+      scene.player.addShield();
+      scene.showFloatingText('SHIELD!');
+    }
+    if (this.type === 'explosion') {
+      scene.explosionReady = true;
+      scene.showFloatingText('EXPLOSION!');
+    }
+    if (this.type === 'freeze') {
+      scene.freezeReady = true;
+      scene.showFloatingText('FREEZE!');
+    }
+    if (this.type === 'speed') {
+      scene.player.addSpeed();
+      scene.showFloatingText('SPEED UP!');
+    }
+    // Add more power-up types here
   }
 }

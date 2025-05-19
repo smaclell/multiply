@@ -6,6 +6,9 @@ import { Laser } from './Laser';
 import { PowerUpManager } from './PowerUpManager';
 import { Player } from './Player';
 import * as config from './config';
+import { FloatingTextManager } from './FloatingTextManager';
+import { Effects } from './Effects';
+import { ScoreManager } from './ScoreManager';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -28,7 +31,7 @@ export class MainScene extends Phaser.Scene {
   hitsUntilPowerUp = Phaser.Math.Between(3, 7);
   playerShield = false;
   shieldCount = 0;
-  floatingTexts: { text: Phaser.GameObjects.Text, alphaSpeed: number }[] = [];
+  floatingTextManager!: FloatingTextManager;
   gameOver = false;
   fadeOverlay: Phaser.GameObjects.Rectangle | null = null;
   fadeTween: Phaser.Tweens.Tween | null = null;
@@ -36,10 +39,7 @@ export class MainScene extends Phaser.Scene {
   explosionReady = false;
   freezeReady = false;
   freezeLaserIndex: number | null = null;
-  score: number = 0;
-  scoreText: Phaser.GameObjects.Text | null = null;
-  highScore: number = 0;
-  highScoreText: Phaser.GameObjects.Text | null = null;
+  scoreManager!: ScoreManager;
 
   constructor() {
     super('MainScene');
@@ -74,27 +74,12 @@ export class MainScene extends Phaser.Scene {
     this.enemies.push(enemy);
     // PowerUpManager
     this.powerUpManager = new PowerUpManager(this, this.arenaWidth, this.arenaHeight);
-    this.score = 0;
-    // High score from localStorage
-    const savedHighScore = window.localStorage.getItem('multiply_high_score');
-    this.highScore = savedHighScore ? parseInt(savedHighScore, 10) : 0;
-    this.scoreText = this.add.text(24, 18, 'Score: 0', {
-      fontSize: '28px',
-      color: '#fff',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 4,
-    }).setOrigin(0, 0).setDepth(30);
-    this.highScoreText = this.add.text(this.arenaWidth - 24, 18, `High Score: ${this.highScore}`, {
-      fontSize: '28px',
-      color: '#fff',
-      fontStyle: 'bold',
-      stroke: '#000',
-      strokeThickness: 4,
-    }).setOrigin(1, 0).setDepth(30);
+    this.scoreManager = new ScoreManager(this);
+    this.floatingTextManager = new FloatingTextManager(this);
   }
 
   startShooting(direction: Direction) {
+    if (this.gameOver) return;
     if (this.shootingDirections[direction]?.timer) return;
     this.shootLaser(direction);
     const timeout = window.setTimeout(() => {
@@ -116,7 +101,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   shootLaser(direction: Direction) {
-    if (!this.player) return;
+    if (this.gameOver) return;
     const laserWidth = direction === 'left' || direction === 'right' ? config.LASER_WIDTH : config.LASER_HEIGHT;
     const laserHeight = direction === 'up' || direction === 'down' ? config.LASER_WIDTH : config.LASER_HEIGHT;
     let color = config.LASER_COLOR;
@@ -139,6 +124,8 @@ export class MainScene extends Phaser.Scene {
       laser.move(this.laserSpeed);
       return laser.x >= -20 && laser.x <= this.arenaWidth + 20 && laser.y >= -20 && laser.y <= this.arenaHeight + 20;
     });
+    // Always update floating texts, even after game over
+    this.floatingTextManager.update();
     if (this.gameOver) return;
     if (!this.cursors || !this.wasd) return;
     let dx = 0, dy = 0;
@@ -179,32 +166,16 @@ export class MainScene extends Phaser.Scene {
             this.enemies.splice(j, 1);
             lasersToRemove.add(laser);
           } else {
+            // Split the enemy into two new enemies
+            const splitEnemies = enemy.splitAndKnockback(laser.direction);
             // Remove the hit enemy
             enemy.destroy();
             this.enemies.splice(j, 1);
             this.updateScore(1); // +1 for normal split
             // Remove the laser
             lasersToRemove.add(laser);
-            // Calculate knockback direction
-            let angle = 0;
-            if (laser.direction === 'left') angle = Math.PI;
-            if (laser.direction === 'right') angle = 0;
-            if (laser.direction === 'up') angle = -Math.PI / 2;
-            if (laser.direction === 'down') angle = Math.PI / 2;
-            // Spawn two new enemies with knockback
-            for (let k = 0; k < 2; k++) {
-              const offsetAngle = angle + (Math.random() - 0.5) * 0.5; // Slight random spread
-              const spawnDist = 18;
-              const ex = enemy.x + Math.cos(offsetAngle) * spawnDist;
-              const ey = enemy.y + Math.sin(offsetAngle) * spawnDist;
-              const newEnemy = new Enemy(this, ex, ey, this.enemySize, this.enemySize, config.ENEMY_COLOR);
-              // Knockback velocity
-              const knockback = 6 + Math.random() * 2;
-              newEnemy.vx = Math.cos(offsetAngle) * knockback;
-              newEnemy.vy = Math.sin(offsetAngle) * knockback;
-              this.add.existing(newEnemy);
-              newEnemies.push(newEnemy);
-            }
+            // Add the two new enemies
+            newEnemies.push(...splitEnemies);
           }
           // Power-up spawn logic
           this.hitsUntilPowerUp--;
@@ -215,7 +186,8 @@ export class MainScene extends Phaser.Scene {
           // Explosion power-up logic
           if (this.explosionReady) {
             this.explosionReady = false;
-            this.explosionEffect(laser.x, laser.y);
+            const destroyed = Effects.explosionEffect(this, laser.x, laser.y, this.enemies, this.enemySize);
+            if (destroyed > 0) this.updateScore(destroyed);
           }
           // Freeze power-up logic
           if (this.freezeReady && this.freezeLaserIndex === i) {
@@ -244,14 +216,7 @@ export class MainScene extends Phaser.Scene {
     this.powerUpManager.update(this.player.x, this.player.y, (powerUp) => this.collectPowerUp(powerUp));
 
     // Floating text update
-    this.floatingTexts = this.floatingTexts.filter(obj => {
-      obj.text.alpha -= obj.alphaSpeed;
-      if (obj.text.alpha <= 0) {
-        obj.text.destroy();
-        return false;
-      }
-      return true;
-    });
+    this.floatingTextManager.update();
 
     // --- Game Over check ---
     for (let i = 0; i < this.enemies.length; i++) {
@@ -263,7 +228,7 @@ export class MainScene extends Phaser.Scene {
           enemy.destroy();
           this.enemies.splice(i, 1);
           // Shield explosion: push back all nearby enemies
-          this.shieldExplosion(this.player.x, this.player.y);
+          Effects.shieldExplosion(this, this.player.x, this.player.y);
           break;
         } else {
           this.endGame();
@@ -311,33 +276,9 @@ export class MainScene extends Phaser.Scene {
 
     // Freeze spread: if any enemy touches a frozen enemy, they also freeze (only once per enemy, and only two others per freeze event)
     const freezeDuration = 2;
-    for (let i = 0; i < this.enemies.length; i++) {
-      const e1 = this.enemies[i];
-      if (e1.freezeTimer > 0 && !e1.freezeSpread && e1.freezeSpreadCount < 2) {
-        for (let j = 0; j < this.enemies.length; j++) {
-          if (i === j) continue;
-          const e2 = this.enemies[j];
-          if (e2.freezeTimer <= 0) {
-            const d = Phaser.Math.Distance.Between(e1.x, e1.y, e2.x, e2.y);
-            if (d < this.enemySize) {
-              e2.freezeTimer = freezeDuration;
-              e2.freezeSpread = false; // allow e2 to spread once
-              e2.freezeSpreadCount = 0;
-              e1.freezeSpreadCount++;
-              if (e1.freezeSpreadCount >= 2) {
-                e1.freezeSpread = true; // e1 has spread freeze to two, don't spread again
-                break;
-              }
-            }
-          }
-        }
-      }
-      // Reset freezeSpread when thawed
-      if (e1.freezeTimer <= 0) {
-        e1.freezeSpread = false;
-        e1.freezeSpreadCount = 0;
-      }
-    }
+    Enemy.spreadFreeze(this.enemies, freezeDuration);
+
+    this.player.update();
   }
 
   shutdown() {
@@ -351,35 +292,12 @@ export class MainScene extends Phaser.Scene {
   }
 
   collectPowerUp(powerUp: PowerUp) {
-    if (powerUp.type === 'shield') {
-      this.player.addShield();
-      this.showFloatingText('SHIELD!');
-    }
-    if (powerUp.type === 'explosion') {
-      this.explosionReady = true;
-      this.showFloatingText('EXPLOSION!');
-    }
-    if (powerUp.type === 'freeze') {
-      this.freezeReady = true;
-      this.showFloatingText('FREEZE!');
-    }
-    if (powerUp.type === 'speed') {
-      this.player.addSpeed();
-      this.showFloatingText('SPEED UP!');
-    }
-    // Add more power-up types here
+    powerUp.applyEffect(this);
   }
 
   showFloatingText(text: string) {
-    const t = this.add.text(this.player.x, this.player.y - 40, text, {
-      fontSize: config.FLOATING_TEXT_FONT_SIZE,
-      color: config.FLOATING_TEXT_COLOR,
-      fontStyle: 'bold',
-      stroke: config.FLOATING_TEXT_STROKE,
-      strokeThickness: config.FLOATING_TEXT_STROKE_THICKNESS,
-    }).setOrigin(0.5);
-    t.alpha = 1;
-    this.floatingTexts.push({ text: t, alphaSpeed: config.FLOATING_TEXT_ALPHA_SPEED });
+    if (this.gameOver) return;
+    this.floatingTextManager.add(text, this.player.x, this.player.y - 40);
   }
 
   endGame() {
@@ -403,15 +321,8 @@ export class MainScene extends Phaser.Scene {
     this.enemies.forEach(e => e.destroy());
     this.enemies = [];
     this.powerUpManager.clear();
-    this.floatingTexts.forEach(obj => obj.text.destroy());
-    this.floatingTexts = [];
-    if (this._shieldText) {
-      this._shieldText.destroy();
-      this._shieldText = null;
-    }
-    this.player.x = this.arenaWidth / 2;
-    this.player.y = this.arenaHeight / 2;
-    this.player.shieldCount = 0;
+    this.floatingTextManager.clear();
+    this.player.reset(this.arenaWidth / 2, this.arenaHeight / 2);
     // Reset state
     this.playerShield = false;
     this.hitsUntilPowerUp = Phaser.Math.Between(3, 7);
@@ -430,85 +341,10 @@ export class MainScene extends Phaser.Scene {
     const enemy = new Enemy(this, x, y, this.enemySize, this.enemySize, config.ENEMY_COLOR);
     this.add.existing(enemy);
     this.enemies.push(enemy);
-    this.score = 0;
-    if (this.scoreText) {
-      this.scoreText.text = 'Score: 0';
-    }
-    // Do not reset high score
-  }
-
-  shieldExplosion(x: number, y: number) {
-    // Visual effect: white circle that quickly expands and fades
-    const explosion = this.add.circle(x, y, 30, config.SHIELD_EXPLOSION_COLOR, 0.5).setDepth(10);
-    this.tweens.add({
-      targets: explosion,
-      radius: { from: 30, to: 100 },
-      alpha: { from: 0.5, to: 0 },
-      duration: 350,
-      onComplete: () => explosion.destroy(),
-    });
-    // Push back all nearby enemies
-    for (const enemy of this.enemies) {
-      const dist = Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y);
-      if (dist < 100) {
-        const angle = Math.atan2(enemy.y - y, enemy.x - x);
-        const force = 12 * (1 - dist / 100); // Stronger if closer
-        enemy.vx += Math.cos(angle) * force;
-        enemy.vy += Math.sin(angle) * force;
-      }
-    }
-  }
-
-  explosionEffect(x: number, y: number) {
-    // Visual effect: orange circle that quickly expands and fades
-    const explosionRadius = 180;
-    const explosion = this.add.circle(x, y, 40, config.EXPLOSION_COLOR, 0.5).setDepth(10);
-    this.tweens.add({
-      targets: explosion,
-      radius: { from: 40, to: explosionRadius },
-      alpha: { from: 0.5, to: 0 },
-      duration: 400,
-      onComplete: () => explosion.destroy(),
-    });
-    // Affect all enemies in radius
-    for (let i = this.enemies.length - 1; i >= 0; i--) {
-      const enemy = this.enemies[i];
-      if (isCircleColliding(x, y, explosionRadius, enemy.x, enemy.y, this.enemySize / 2)) {
-        // Split this enemy (like a laser hit)
-        for (let k = 0; k < 2; k++) {
-          const angle = Math.random() * Math.PI * 2;
-          const spawnDist = 18;
-          const ex = enemy.x + Math.cos(angle) * spawnDist;
-          const ey = enemy.y + Math.sin(angle) * spawnDist;
-          const newEnemy = new Enemy(this, ex, ey, this.enemySize, this.enemySize, config.ENEMY_COLOR);
-          // Knockback velocity
-          const knockback = 6 + Math.random() * 2;
-          newEnemy.vx = Math.cos(angle) * knockback;
-          newEnemy.vy = Math.sin(angle) * knockback;
-          this.add.existing(newEnemy);
-          this.enemies.push(newEnemy);
-        }
-        // Push back the original enemy and then destroy it
-        const pushAngle = Math.atan2(enemy.y - y, enemy.x - x);
-        enemy.vx += Math.cos(pushAngle) * 12;
-        enemy.vy += Math.sin(pushAngle) * 12;
-        enemy.destroy();
-        this.enemies.splice(i, 1);
-      }
-    }
+    this.scoreManager.reset();
   }
 
   updateScore(points: number) {
-    this.score += points;
-    if (this.scoreText) {
-      this.scoreText.text = `Score: ${this.score}`;
-    }
-    if (this.score > this.highScore) {
-      this.highScore = this.score;
-      if (this.highScoreText) {
-        this.highScoreText.text = `High Score: ${this.highScore}`;
-      }
-      window.localStorage.setItem('multiply_high_score', this.highScore.toString());
-    }
+    this.scoreManager.add(points);
   }
 }
