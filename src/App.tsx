@@ -55,6 +55,31 @@ class Enemy extends Phaser.GameObjects.Rectangle {
   }
 }
 
+type PowerUpType = 'shield' | 'explosion' | 'freeze' | 'piercing';
+
+class PowerUp extends Phaser.GameObjects.Ellipse {
+  type: PowerUpType;
+  pulseTween: Phaser.Tweens.Tween;
+  constructor(scene: Phaser.Scene, x: number, y: number, type: PowerUpType) {
+    super(scene, x, y, 32, 32, 0x22c55e);
+    this.type = type;
+    scene.add.existing(this);
+    // Pulsate
+    this.pulseTween = scene.tweens.add({
+      targets: this,
+      scale: { from: 1, to: 1.3 },
+      duration: 600,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+  destroy(fromScene?: boolean) {
+    this.pulseTween?.stop();
+    super.destroy(fromScene);
+  }
+}
+
 function PhaserGame() {
   const gameRef = useRef<HTMLDivElement>(null);
 
@@ -70,10 +95,14 @@ function PhaserGame() {
       shootDelay = 250; // ms before first repeat
       shootInterval = 120; // ms between shots
       enemies: Enemy[] = [];
+      powerUps: PowerUp[] = [];
       enemySpeed = 1.5; // Start slow
       enemySize = 36;
       arenaWidth = 800;
       arenaHeight = 800;
+      hitsUntilPowerUp = Phaser.Math.Between(3, 7);
+      playerShield = false;
+      floatingTexts: { text: Phaser.GameObjects.Text, alphaSpeed: number }[] = [];
 
       constructor() {
         super('MainScene');
@@ -192,6 +221,12 @@ function PhaserGame() {
                 this.add.existing(newEnemy);
                 newEnemies.push(newEnemy);
               }
+              // Power-up spawn logic
+              this.hitsUntilPowerUp--;
+              if (this.hitsUntilPowerUp <= 0) {
+                this.spawnPowerUp();
+                this.hitsUntilPowerUp = Phaser.Math.Between(3, 7);
+              }
               hit = true;
               break; // Only one enemy can be hit by a laser at a time
             }
@@ -205,6 +240,26 @@ function PhaserGame() {
         this.enemies.push(...newEnemies);
         // --- End splitting and knockback logic ---
 
+        // Power-up collision
+        this.powerUps = this.powerUps.filter(powerUp => {
+          if (Phaser.Math.Distance.Between(this.rect!.x, this.rect!.y, powerUp.x, powerUp.y) < 40) {
+            this.collectPowerUp(powerUp);
+            powerUp.destroy();
+            return false;
+          }
+          return true;
+        });
+
+        // Floating text update
+        this.floatingTexts = this.floatingTexts.filter(obj => {
+          obj.text.alpha -= obj.alphaSpeed;
+          if (obj.text.alpha <= 0) {
+            obj.text.destroy();
+            return false;
+          }
+          return true;
+        });
+
         // Enemy update
         if (this.rect) {
           for (let i = 0; i < this.enemies.length; i++) {
@@ -217,6 +272,36 @@ function PhaserGame() {
         Object.keys(this.shootingDirections).forEach(dir => {
           this.stopShooting(dir as Direction);
         });
+      }
+
+      spawnPowerUp() {
+        // Only shield for now
+        const type: PowerUpType = 'shield';
+        const margin = 60;
+        const x = Phaser.Math.Between(margin, this.arenaWidth - margin);
+        const y = Phaser.Math.Between(margin, this.arenaHeight - margin);
+        const powerUp = new PowerUp(this, x, y, type);
+        this.powerUps.push(powerUp);
+      }
+
+      collectPowerUp(powerUp: PowerUp) {
+        if (powerUp.type === 'shield') {
+          this.playerShield = true;
+          this.showFloatingText('SHIELD!');
+        }
+        // Add more power-up types here
+      }
+
+      showFloatingText(text: string) {
+        const t = this.add.text(this.rect!.x, this.rect!.y - 40, text, {
+          fontSize: '32px',
+          color: '#22c55e',
+          fontStyle: 'bold',
+          stroke: '#000',
+          strokeThickness: 4,
+        }).setOrigin(0.5);
+        t.alpha = 1;
+        this.floatingTexts.push({ text: t, alphaSpeed: 0.025 });
       }
     }
 
