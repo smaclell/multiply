@@ -13,6 +13,8 @@ class Enemy extends Phaser.GameObjects.Rectangle {
   repulsionStrength = 0.8;
   repulsionRadius = 40;
   freezeTimer = 0;
+  freezeSpread = false;
+  freezeSpreadCount = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number, color: number) {
     super(scene, x, y, w, h, color);
@@ -374,11 +376,11 @@ function PhaserGame() {
           }
         }
 
-        // Freeze spread: if any enemy touches a frozen enemy, they also freeze
+        // Freeze spread: if any enemy touches a frozen enemy, they also freeze (only once per enemy, and only two others per freeze event)
         const freezeDuration = 2;
         for (let i = 0; i < this.enemies.length; i++) {
           const e1 = this.enemies[i];
-          if (e1.freezeTimer > 0) {
+          if (e1.freezeTimer > 0 && !e1.freezeSpread && e1.freezeSpreadCount < 2) {
             for (let j = 0; j < this.enemies.length; j++) {
               if (i === j) continue;
               const e2 = this.enemies[j];
@@ -386,9 +388,21 @@ function PhaserGame() {
                 const d = Phaser.Math.Distance.Between(e1.x, e1.y, e2.x, e2.y);
                 if (d < this.enemySize) {
                   e2.freezeTimer = freezeDuration;
+                  e2.freezeSpread = false; // allow e2 to spread once
+                  e2.freezeSpreadCount = 0;
+                  e1.freezeSpreadCount++;
+                  if (e1.freezeSpreadCount >= 2) {
+                    e1.freezeSpread = true; // e1 has spread freeze to two, don't spread again
+                    break;
+                  }
                 }
               }
             }
+          }
+          // Reset freezeSpread when thawed
+          if (e1.freezeTimer <= 0) {
+            e1.freezeSpread = false;
+            e1.freezeSpreadCount = 0;
           }
         }
       }
@@ -474,6 +488,10 @@ function PhaserGame() {
         this.shieldCount = 0;
         this.hitsUntilPowerUp = Phaser.Math.Between(3, 7);
         this.gameOver = false;
+        // Reset all power-up states
+        this.explosionReady = false;
+        this.freezeReady = false;
+        this.freezeLaserIndex = null;
         // Remove fade overlay
         if (this.fadeOverlay) {
           this.fadeOverlay.destroy();
