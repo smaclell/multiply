@@ -134,6 +134,11 @@ export class MainScene extends Phaser.Scene {
   }
 
   update() {
+    // Always move lasers and remove off-screen ones
+    this.lasers = this.lasers.filter(laser => {
+      laser.move(this.laserSpeed);
+      return laser.x >= -20 && laser.x <= this.arenaWidth + 20 && laser.y >= -20 && laser.y <= this.arenaHeight + 20;
+    });
     if (this.gameOver) return;
     if (!this.cursors || !this.wasd) return;
     let dx = 0, dy = 0;
