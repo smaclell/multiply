@@ -212,6 +212,15 @@ export class MainScene extends Phaser.Scene {
     this.enemies.push(...newEnemies);
     // --- End splitting and knockback logic ---
 
+    // If a freeze shot missed (laser went off-screen or didn't hit), consume the freeze
+    if (this.freezeReady && this.freezeLaserIndex !== null) {
+      // If the freeze laser is no longer in the lasers array, it missed
+      if (!this.lasers[this.freezeLaserIndex]) {
+        this.freezeReady = false;
+        this.freezeLaserIndex = null;
+      }
+    }
+
     // Power-up update and collection
     this.powerUpManager.update(this.player.x, this.player.y, (powerUp) => this.collectPowerUp(powerUp));
 
