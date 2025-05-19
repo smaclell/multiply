@@ -60,9 +60,11 @@ type PowerUpType = 'shield' | 'explosion' | 'freeze' | 'piercing';
 class PowerUp extends Phaser.GameObjects.Ellipse {
   type: PowerUpType;
   pulseTween: Phaser.Tweens.Tween;
+  spawnTime: number;
   constructor(scene: Phaser.Scene, x: number, y: number, type: PowerUpType) {
     super(scene, x, y, 32, 32, 0x22c55e);
     this.type = type;
+    this.spawnTime = scene.time.now;
     scene.add.existing(this);
     // Pulsate
     this.pulseTween = scene.tweens.add({
@@ -102,10 +104,12 @@ function PhaserGame() {
       arenaHeight = 800;
       hitsUntilPowerUp = Phaser.Math.Between(3, 7);
       playerShield = false;
+      shieldCount = 0;
       floatingTexts: { text: Phaser.GameObjects.Text, alphaSpeed: number }[] = [];
       gameOver = false;
       fadeOverlay: Phaser.GameObjects.Rectangle | null = null;
       fadeTween: Phaser.Tweens.Tween | null = null;
+      _shieldText: Phaser.GameObjects.Text | null = null;
 
       constructor() {
         super('MainScene');
@@ -249,8 +253,18 @@ function PhaserGame() {
         this.enemies.push(...newEnemies);
         // --- End splitting and knockback logic ---
 
-        // Power-up collision
+        // Power-up collision and fade out
         this.powerUps = this.powerUps.filter(powerUp => {
+          // Fade out after 5 seconds
+          const elapsed = this.time.now - powerUp.spawnTime;
+          if (elapsed > 4000 && elapsed < 5000) {
+            powerUp.alpha = 1 - (elapsed - 4000) / 1000;
+          } else if (elapsed >= 5000) {
+            powerUp.destroy();
+            return false;
+          } else {
+            powerUp.alpha = 1;
+          }
           if (Phaser.Math.Distance.Between(this.rect!.x, this.rect!.y, powerUp.x, powerUp.y) < 40) {
             this.collectPowerUp(powerUp);
             powerUp.destroy();
@@ -274,12 +288,14 @@ function PhaserGame() {
           const enemy = this.enemies[i];
           const dist = Phaser.Math.Distance.Between(this.rect.x, this.rect.y, enemy.x, enemy.y);
           if (dist < (this.enemySize + 50) / 2) { // 50 is player size
-            if (this.playerShield) {
-              this.playerShield = false;
+            if (this.shieldCount > 0) {
+              this.shieldCount--;
               this.showFloatingText('SHIELD BLOCKED!');
               // Optionally, destroy the enemy that hit
               enemy.destroy();
               this.enemies.splice(i, 1);
+              // Shield explosion: push back all nearby enemies
+              this.shieldExplosion(this.rect.x, this.rect.y);
               break;
             } else {
               this.endGame();
@@ -288,6 +304,27 @@ function PhaserGame() {
           }
         }
         // --- End Game Over check ---
+
+        // Show shield count as floating text (persistent)
+        if (this.shieldCount > 0) {
+          if (!this._shieldText) {
+            this._shieldText = this.add.text(this.rect!.x, this.rect!.y - 70, '', {
+              fontSize: '24px',
+              color: '#22c55e',
+              fontStyle: 'bold',
+              stroke: '#000',
+              strokeThickness: 4,
+            }).setOrigin(0.5);
+            this._shieldText.setDepth(20);
+          }
+          this._shieldText.text = `Shields: ${this.shieldCount}`;
+          this._shieldText.x = this.rect!.x;
+          this._shieldText.y = this.rect!.y - 70;
+          this._shieldText.alpha = 1;
+        } else if (this._shieldText) {
+          this._shieldText.destroy();
+          this._shieldText = null;
+        }
 
         // Enemy update
         if (this.rect) {
@@ -315,7 +352,7 @@ function PhaserGame() {
 
       collectPowerUp(powerUp: PowerUp) {
         if (powerUp.type === 'shield') {
-          this.playerShield = true;
+          this.shieldCount++;
           this.showFloatingText('SHIELD!');
         }
         // Add more power-up types here
@@ -357,12 +394,17 @@ function PhaserGame() {
         this.powerUps = [];
         this.floatingTexts.forEach(obj => obj.text.destroy());
         this.floatingTexts = [];
+        if (this._shieldText) {
+          this._shieldText.destroy();
+          this._shieldText = null;
+        }
         if (this.rect) {
           this.rect.x = this.arenaWidth / 2;
           this.rect.y = this.arenaHeight / 2;
         }
         // Reset state
         this.playerShield = false;
+        this.shieldCount = 0;
         this.hitsUntilPowerUp = Phaser.Math.Between(3, 7);
         this.gameOver = false;
         // Remove fade overlay
@@ -380,6 +422,28 @@ function PhaserGame() {
         const enemy = new Enemy(this, x, y, this.enemySize, this.enemySize, 0xfacc15);
         this.add.existing(enemy);
         this.enemies.push(enemy);
+      }
+
+      shieldExplosion(x: number, y: number) {
+        // Visual effect: white circle that quickly expands and fades
+        const explosion = this.add.circle(x, y, 30, 0xffffff, 0.5).setDepth(10);
+        this.tweens.add({
+          targets: explosion,
+          radius: { from: 30, to: 100 },
+          alpha: { from: 0.5, to: 0 },
+          duration: 350,
+          onComplete: () => explosion.destroy(),
+        });
+        // Push back all nearby enemies
+        for (const enemy of this.enemies) {
+          const dist = Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y);
+          if (dist < 100) {
+            const angle = Math.atan2(enemy.y - y, enemy.x - x);
+            const force = 12 * (1 - dist / 100); // Stronger if closer
+            enemy.vx += Math.cos(angle) * force;
+            enemy.vy += Math.sin(angle) * force;
+          }
+        }
       }
     }
 
