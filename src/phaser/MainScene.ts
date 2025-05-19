@@ -296,6 +296,14 @@ export class MainScene extends Phaser.Scene {
       this.enemies[i].update(this.player, this.enemies);
     }
 
+    // If all enemies are eliminated, spawn a new one
+    if (!this.gameOver && this.enemies.length === 0) {
+      const { x, y } = randomEdgePosition(this.arenaWidth, this.arenaHeight);
+      const enemy = new Enemy(this, x, y, this.enemySize, this.enemySize, config.ENEMY_COLOR);
+      this.add.existing(enemy);
+      this.enemies.push(enemy);
+    }
+
     // Freeze spread: if any enemy touches a frozen enemy, they also freeze (only once per enemy, and only two others per freeze event)
     const freezeDuration = 2;
     for (let i = 0; i < this.enemies.length; i++) {
