@@ -16,7 +16,6 @@ export class MainScene extends Phaser.Scene {
   player!: Player;
   cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   wasd: Record<string, Phaser.Input.Keyboard.Key> | null = null;
-  speed = config.PLAYER_SPEED;
   lasers: Laser[] = [];
   laserSpeed = config.LASER_SPEED;
   shootingDirections: Partial<Record<Direction, { timer: number | null }>> = {};
@@ -44,7 +43,9 @@ export class MainScene extends Phaser.Scene {
   constructor() {
     super('MainScene');
   }
-
+  get speed() {
+    return this.player.speed;
+  }
   create() {
     this.player = new Player(this, this.arenaWidth / 2, this.arenaHeight / 2, config.PLAYER_SIZE, config.PLAYER_COLOR);
     this.cursors = this.input.keyboard!.createCursorKeys();
