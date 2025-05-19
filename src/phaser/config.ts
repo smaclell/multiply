@@ -6,6 +6,7 @@ export const ARENA_HEIGHT = 800;
 export const PLAYER_SIZE = 50;
 export const PLAYER_COLOR = 0x38bdf8;
 export const PLAYER_SPEED = 4;
+export const PLAYER_SPEED_MAX = 12;
 
 export const ENEMY_SIZE = 36;
 export const ENEMY_COLOR = 0xfacc15;

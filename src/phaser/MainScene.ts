@@ -358,6 +358,10 @@ export class MainScene extends Phaser.Scene {
       this.freezeReady = true;
       this.showFloatingText('FREEZE!');
     }
+    if (powerUp.type === 'speed') {
+      this.player.addSpeed();
+      this.showFloatingText('SPEED UP!');
+    }
     // Add more power-up types here
   }
 

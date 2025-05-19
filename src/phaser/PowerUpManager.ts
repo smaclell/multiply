@@ -15,7 +15,7 @@ export class PowerUpManager {
   }
 
   spawnPowerUp() {
-    const types: PowerUpType[] = ['shield', 'explosion', 'freeze'];
+    const types: PowerUpType[] = ['shield', 'explosion', 'freeze', 'speed'];
     const type: PowerUpType = types[Phaser.Math.Between(0, types.length - 1)];
     const margin = 60;
     const x = Phaser.Math.Between(margin, this.arenaWidth - margin);

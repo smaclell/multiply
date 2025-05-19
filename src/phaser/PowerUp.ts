@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import * as config from './config';
 
-export type PowerUpType = 'shield' | 'explosion' | 'freeze' | 'piercing';
+export type PowerUpType = 'shield' | 'explosion' | 'freeze' | 'piercing' | 'speed';
 
 export class PowerUp extends Phaser.GameObjects.Ellipse {
   type: PowerUpType;

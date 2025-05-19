@@ -28,5 +28,9 @@ export class Player extends Phaser.GameObjects.Rectangle {
     return false;
   }
 
+  addSpeed(amount: number = 0.75) {
+    this.speed = Math.min(this.speed + amount, config.PLAYER_SPEED_MAX);
+  }
+
   // Add more player methods as needed
 }
