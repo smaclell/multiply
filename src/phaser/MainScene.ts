@@ -188,7 +188,7 @@ export class MainScene extends Phaser.Scene {
           if (this.explosionReady) {
             this.explosionReady = false;
             const destroyed = Effects.explosionEffect(this, laser.x, laser.y, this.enemies, this.enemySize);
-            if (destroyed > 0) this.updateScore(destroyed);
+            if (destroyed > 0) this.updateScore(destroyed * 3);
           }
           // Freeze power-up logic
           if (this.freezeReady && this.freezeLaserIndex === i) {
