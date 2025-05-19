@@ -110,6 +110,7 @@ function PhaserGame() {
       fadeOverlay: Phaser.GameObjects.Rectangle | null = null;
       fadeTween: Phaser.Tweens.Tween | null = null;
       _shieldText: Phaser.GameObjects.Text | null = null;
+      explosionReady = false;
 
       constructor() {
         super('MainScene');
@@ -240,6 +241,11 @@ function PhaserGame() {
                 this.spawnPowerUp();
                 this.hitsUntilPowerUp = Phaser.Math.Between(3, 7);
               }
+              // Explosion power-up logic
+              if (this.explosionReady) {
+                this.explosionReady = false;
+                this.explosionEffect(laser.x, laser.y);
+              }
               hit = true;
               break; // Only one enemy can be hit by a laser at a time
             }
@@ -341,8 +347,9 @@ function PhaserGame() {
       }
 
       spawnPowerUp() {
-        // Only shield for now
-        const type: PowerUpType = 'shield';
+        // Randomly choose shield or explosion for now
+        const types: PowerUpType[] = ['shield', 'explosion'];
+        const type: PowerUpType = types[Phaser.Math.Between(0, types.length - 1)];
         const margin = 60;
         const x = Phaser.Math.Between(margin, this.arenaWidth - margin);
         const y = Phaser.Math.Between(margin, this.arenaHeight - margin);
@@ -354,6 +361,10 @@ function PhaserGame() {
         if (powerUp.type === 'shield') {
           this.shieldCount++;
           this.showFloatingText('SHIELD!');
+        }
+        if (powerUp.type === 'explosion') {
+          this.explosionReady = true;
+          this.showFloatingText('EXPLOSION!');
         }
         // Add more power-up types here
       }
@@ -442,6 +453,46 @@ function PhaserGame() {
             const force = 12 * (1 - dist / 100); // Stronger if closer
             enemy.vx += Math.cos(angle) * force;
             enemy.vy += Math.sin(angle) * force;
+          }
+        }
+      }
+
+      explosionEffect(x: number, y: number) {
+        // Visual effect: orange circle that quickly expands and fades
+        const explosionRadius = 180;
+        const explosion = this.add.circle(x, y, 40, 0xf59e42, 0.5).setDepth(10);
+        this.tweens.add({
+          targets: explosion,
+          radius: { from: 40, to: explosionRadius },
+          alpha: { from: 0.5, to: 0 },
+          duration: 400,
+          onComplete: () => explosion.destroy(),
+        });
+        // Affect all enemies in radius
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+          const enemy = this.enemies[i];
+          const dist = Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y);
+          if (dist < explosionRadius) {
+            // Split this enemy (like a laser hit)
+            for (let k = 0; k < 2; k++) {
+              const angle = Math.random() * Math.PI * 2;
+              const spawnDist = 18;
+              const ex = enemy.x + Math.cos(angle) * spawnDist;
+              const ey = enemy.y + Math.sin(angle) * spawnDist;
+              const newEnemy = new Enemy(this, ex, ey, this.enemySize, this.enemySize, 0xfacc15);
+              // Knockback velocity
+              const knockback = 6 + Math.random() * 2;
+              newEnemy.vx = Math.cos(angle) * knockback;
+              newEnemy.vy = Math.sin(angle) * knockback;
+              this.add.existing(newEnemy);
+              this.enemies.push(newEnemy);
+            }
+            // Push back the original enemy and then destroy it
+            const pushAngle = Math.atan2(enemy.y - y, enemy.x - x);
+            enemy.vx += Math.cos(pushAngle) * 12;
+            enemy.vy += Math.sin(pushAngle) * 12;
+            enemy.destroy();
+            this.enemies.splice(i, 1);
           }
         }
       }
