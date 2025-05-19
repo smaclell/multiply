@@ -36,6 +36,10 @@ export class MainScene extends Phaser.Scene {
   explosionReady = false;
   freezeReady = false;
   freezeLaserIndex: number | null = null;
+  score: number = 0;
+  scoreText: Phaser.GameObjects.Text | null = null;
+  highScore: number = 0;
+  highScoreText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super('MainScene');
@@ -70,6 +74,24 @@ export class MainScene extends Phaser.Scene {
     this.enemies.push(enemy);
     // PowerUpManager
     this.powerUpManager = new PowerUpManager(this, this.arenaWidth, this.arenaHeight);
+    this.score = 0;
+    // High score from localStorage
+    const savedHighScore = window.localStorage.getItem('multiply_high_score');
+    this.highScore = savedHighScore ? parseInt(savedHighScore, 10) : 0;
+    this.scoreText = this.add.text(24, 18, 'Score: 0', {
+      fontSize: '28px',
+      color: '#fff',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 4,
+    }).setOrigin(0, 0).setDepth(30);
+    this.highScoreText = this.add.text(this.arenaWidth - 24, 18, `High Score: ${this.highScore}`, {
+      fontSize: '28px',
+      color: '#fff',
+      fontStyle: 'bold',
+      stroke: '#000',
+      strokeThickness: 4,
+    }).setOrigin(1, 0).setDepth(30);
   }
 
   startShooting(direction: Direction) {
@@ -139,6 +161,7 @@ export class MainScene extends Phaser.Scene {
           if (enemy.freezeTimer > 0) {
             // Shatter effect: destroy, show text, blue burst
             this.showFloatingText('SHATTER!');
+            this.updateScore(2); // +2 for shatter
             const shatter = this.add.circle(enemy.x, enemy.y, 24, config.SHATTER_COLOR, 0.5).setDepth(10);
             this.tweens.add({
               targets: shatter,
@@ -154,6 +177,7 @@ export class MainScene extends Phaser.Scene {
             // Remove the hit enemy
             enemy.destroy();
             this.enemies.splice(j, 1);
+            this.updateScore(1); // +1 for normal split
             // Remove the laser
             lasersToRemove.add(laser);
             // Calculate knockback direction
@@ -389,6 +413,11 @@ export class MainScene extends Phaser.Scene {
     const enemy = new Enemy(this, x, y, this.enemySize, this.enemySize, config.ENEMY_COLOR);
     this.add.existing(enemy);
     this.enemies.push(enemy);
+    this.score = 0;
+    if (this.scoreText) {
+      this.scoreText.text = 'Score: 0';
+    }
+    // Do not reset high score
   }
 
   shieldExplosion(x: number, y: number) {
@@ -449,6 +478,20 @@ export class MainScene extends Phaser.Scene {
         enemy.destroy();
         this.enemies.splice(i, 1);
       }
+    }
+  }
+
+  updateScore(points: number) {
+    this.score += points;
+    if (this.scoreText) {
+      this.scoreText.text = `Score: ${this.score}`;
+    }
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+      if (this.highScoreText) {
+        this.highScoreText.text = `High Score: ${this.highScore}`;
+      }
+      window.localStorage.setItem('multiply_high_score', this.highScore.toString());
     }
   }
 }
